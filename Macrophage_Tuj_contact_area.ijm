@@ -1,168 +1,146 @@
-// this macro quantifies overlap between individual macrophages and tuj1 channel
-//better than channel overlap 
+//Projection area and perimeter macro for macrophages on whole mount images
 
-//Obtain image info
+//ask user to input range parameters 
+title = "Set File Location";
+  width=1024; height=512;
+  desktop = "filepath"
+
+
+  Dialog.createNonBlocking("filez");
+  Dialog.addMessage("Create a new file on your desktop. Copy the filepath and paste it below. Add a backslash at the end of the path ")
+  Dialog.addString("Macrophage Filepath", desktop);
+  Dialog.show();
+  desktop = Dialog.getString();;
+
+//Open image and obtain image information
 run("Open...");
 getTitle();
-title = getTitle(); 
+title = getTitle();
+saved_title = getTitle(); 
 
-//Close out channels
+//split channels, close out unneeded ones
 selectWindow(title);
-run("Split Channels");
+run("Split Channels"); 
 selectWindow("C2-" + title);
-close();
+close(); 
 selectWindow("C1-" + title);
+close(); 
+selectWindow("C3-" + title); 
 close();
-selectWindow("C3-" + title);
-rename("Neuron"); 
-//adjust brightness, z-project 
 
-selectWindow("C4-" + title);
+//convert image to 8-bit for thresholding purposes
+selectWindow("C4-" + title); 
 run("8-bit");
-setAutoThreshold("Default");
 
-run("Auto Threshold", "method=Default white stack use_stack_histogram");
-run("Z Project...", "projection=[Max Intensity]");
-setForegroundColor(119, 119, 119);
+//adjust brightness so that the user can see the image better
+run("Enhance Contrast", "saturated=0.35");
 
-waitForUser("Select all macrophages using the floodfill tool (paintbucket). Click OK when done"); 
+//ask user to QC images before beginning the thresholding process
+//waitForUser("Scrub through the Z-stack. If you observe any speckling or excess noise in front or back channels, adjust parameters in next dialog box.");
+
+//ask user to input range parameters 
+title = "Set Parameters";
+  width=512; height=512;
+  upper = 1
+  lower = nSlices
+
+  Dialog.createNonBlocking("scrub");
+  Dialog.addMessage("Scrub through the Z-stack. If you observe any speckling or excess noise in front or back channels, adjust parameters below:")
+  Dialog.addNumber("Upper Interval", upper);
+  Dialog.addNumber("Lower Interval", lower);
+  Dialog.show();
+  upper = Dialog.getNumber();
+  lower = Dialog.getNumber();;
+
+//dialog command to insert range intervals 
+
+run("Duplicate...", "title=C4PFF duplicate range=" + upper + "-" + lower);
 
 
+//prompt user to set manual threshold
 run("Threshold...");
-setThreshold(88, 158);
+waitForUser("Set the threshold (two windows), then hit OK when done");
+
+
+//insert manual thresholding portion here
+
+
+
+run("Z Project...", "projection=[Max Intensity]");
+rename("max_c4"); 
+//run("Close-");
+setForegroundColor(255, 255, 255); 
+
+
+//prompt user to select all macrophages
+waitForUser("Connect broken macrophages with pen tool. Hit OK when done.");
+
+setForegroundColor(119, 119, 119); 
+//prompt user to select all macrophages
+waitForUser("Select all macrophages using the floodfill tool (paintbucket). Click OK when done");
+
+//isolate these macrophages
+run("Threshold...");
+setThreshold(88, 158); 
 setOption("BlackBackground", false);
 run("Convert to Mask");
 setThreshold(255, 255);
+
+//get area and perimeter measurements for all ROIS selected 
 run("Set Measurements...", "area center perimeter limit display redirect=None decimal=3");
-run("Analyze Particles...", "  show=Outlines display exclude clear summarize add");
-selectWindow("Drawing of MAX_C4-" + title);
-run("Duplicate...", "title=voronoi");
-run("Duplicate...", "title=new");
+run("Analyze Particles...", " show=Outlines display exclude clear summarize add"); 
+run("ROI Manager...");
+run("Measure");
 
-//get area for each macrophage
-roiManager("multi-measure measure_all");
-//selectWindow("Results");
+// prompt user to save the results here and then go back w/ the remainder of the program
+selectWindow("Results");
+rename(saved_title); 
+saveAs("Results", desktop + saved_title + "area_and_perimeter.csv");
+//waitForUser("Copy macrophage area and perimeters to your spreadsheet before preceding with analysis! Hit OK when done!"); 
+selectWindow("Results");
 
-//waitForUser("Copy measurements of macrophages before ROI is cleared in next step!"); 
+selectWindow("max_c4");
 
-selectWindow("Neuron");
-setAutoThreshold("Triangle dark");
-run("Convert to Mask", "method=Triangle background=Dark calculate black");
-run("Magenta");
-run("Z Project...", "projection=[Max Intensity]");
-selectWindow("MAX_C4-" + title);
-rename("macrophage");
-imageCalculator("AND create", "MAX_Neuron","macrophage");
-selectWindow("Result of MAX_Neuron");
-
-setAutoThreshold("Default dark");
-
-run("Convert to Mask");
-roiManager("Show All");
+roiManager("Show None");
 roiManager("Show All with labels");
-roiManager("multi-measure measure_all");
+roiManager("Show None");
 
-//waitForUser("Copy measurements of overlap area!"); 
-
-/*
-//part 3
-//selectWindow("voronoi");
-//run("Set Measurements...", "area center perimeter limit display redirect=None decimal=3");
-selectWindow("voronoi"); 
-run("Find Maxima...", "noise=100 output=[Point Selection] light");
-
-// Pick up image name
-name = ("voronoi");
-// Cleanup
 run("Clear Results");
-roiManager("Reset");
 
-// From a point selection, get the Delaunay data
-run("Delaunay Voronoi", "mode=Delaunay make export");
-//run("Set Measurements...", "area center perimeter limit display redirect=None decimal=3");
-//run("Delaunay Voronoi", "mode=Delaunay inferselectionfromparticles");
+//prompt user to select areas 
+run("ROI Manager...");
+setTool("polygon");
+roiManager("Delete");
+waitForUser("Add all macrophages projection area to ROI manager. Press t to add. Hit ok when done"); 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//have to duplicate each roi and then select for manual id 
+			roi_count = roiManager("count");
+			run("Set Measurements...", "area min centroid center perimeter shape integrated limit display redirect=None decimal=3");
+			for(i=0; i < roi_count; i++) {
+				selectWindow("max_c4");
+				roiManager("Select", i);
+				run("Duplicate...", "duplicate");
+				saveAs("Tiff", desktop + saved_title + "ROI" + i + ".tif");
+				selectWindow("max_c4");
+				roiManager("Select", i);
+				roiManager("Measure");
+				}
 
-nR = nResults;
-Roi.setName("Delaunay Graph");
-run("Add Selection...");
+				
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+//Measurements 
+//run("Set Measurements...", "area min centroid center perimeter shape integrated area_fraction limit display redirect=None decimal=3");
+//roiManager("Measure");
+roiManager("Show All with labels");
+roiManager("List");
+selectWindow("Results");
+saveAs("Results", desktop + saved_title + "projection_area.csv"); 
 
-totalNeighbors = newArray(0); 
-sumDistances = newArray(0);
-pointIDs = newArray(0);  
-pointIndexes = newArray(0); 
+waitForUser("Analysis is Complete"); 
 
-//go through each measurement 
-for(i=0; i<nR; i++) {
-	cX1 = getResult("x1", i);
-	cY1 = getResult("y1", i);
-	cX2 = getResult("x2", i);
-	cY2 = getResult("y2", i);
-	twopoints = newArray(""+cX1+""+cY1, ""+cX2+""+cY2); // point id for each coordinate
-
-    for(k=0; k<2; k++) {
-	    pointID = twopoints[k];
-		if(isNew(pointIDs, pointID)) {
-			
-	        pointIDs = Array.concat(pointIDs, pointID);
-			
-			idx = pointIDs.length-1;
-			pointIndexes = Array.concat(pointIndexes, idx);
-			
-			totalNeighbors = Array.concat(totalNeighbors, 0);
-			
-			sumDistances = Array.concat(sumDistances, 0);
-	
-	
-			makePoint(cX1,cY1);
-			Roi.setName("Object #"+IJ.pad(idx+1, 2));
-			roiManager("Add");
-			
-		} else {
-			// Point already exists
-			idx = getPointIdx(pointIDs, pointID);
-			
-		}
-
-		totalNeighbors[idx]++;
-
-
-		dist = distance(cX1, cY1, cX2, cY2);    
-		sumDistances[idx] += dist;
-	}
-}
-
-// Results prompt 
-IJ.renameResults("Raw From Delaunay");
-for(i=0; i<pointIDs.length; i++) {
-	setResult("Label", i, name);
-	setResult("Object", i, pointIndexes[i]+1);
-	setResult("N Neighbors", i, totalNeighbors[i]);
-	setResult("Average Distance", i, sumDistances[i]/totalNeighbors[i]);
-}
-
-// Compute XY distance
-function distance(x1,y1,x2,y2) {
-	return sqrt((x1-x2) * (x1-x2) + (y1-y2) * (y1-y2));
-}
-
-// ignore repeat points
-function getPointIdx(pointIDs, pointID) {
-	for(i=0; i<pointIDs.length; i++) {
-		if(pointIDs[i] == pointID) {return i}
-	}
-	return -1;
-}
-
-// index of existing pt 
-function isNew(pointIDs, pointID) {
-	for(i=0; i<pointIDs.length; i++) {
-		if(pointIDs[i] == pointID) {return false}
-		
-	}
-	return true;
-}
-*/
-
- 
