@@ -1,0 +1,14 @@
+open("/Users/sarahbahsoun/Documents/Lab Work/Image Analysis/Asyn Image Analysis/Image Sets/whole mount 5.5.21/PFF 7dpi Mix 2002.nd2");
+run("Split Channels");
+close();
+selectWindow("C2-PFF 7dpi Mix 2002.nd2");
+selectWindow("C1-PFF 7dpi Mix 2002.nd2");
+close();
+run("Duplicate...", "duplicate");
+run("Auto Threshold", "method=[Try all] white stack");
+saveAs("Tiff", "/Users/sarahbahsoun/Desktop/Montage_to_show.tif");
+close();
+selectWindow("C3-PFF 7dpi Mix 2002.nd2");
+run("Auto Threshold", "method=[Try all] white stack");
+saveAs("Tiff", "/Users/sarahbahsoun/Desktop/pink_montage_to_show.tif");
+close();
